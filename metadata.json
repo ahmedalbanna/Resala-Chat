@@ -1,0 +1,6 @@
+{
+  "name": "Resala Chat",
+  "description": "تطبيق تراسل فوري متكامل ومشفر ومؤمن، يدعم المحادثات الفورية وتخزين البيانات محلياً بشكل آمن.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
