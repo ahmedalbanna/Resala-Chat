@@ -129,12 +129,12 @@ fun ChatDetailScreen(
                     }
                 },
                 actions = {
-                    // Call WebRTC controls
+                    // Call controls (Phase 0: simulated — WebRTC P2P lands in Phase 3)
                     IconButton(onClick = { onStartCall(false) }) {
-                        Icon(imageVector = Icons.Default.Phone, contentDescription = "مكالمة صوتية WebRTC")
+                        Icon(imageVector = Icons.Default.Phone, contentDescription = "مكالمة صوتية (محاكاة)")
                     }
                     IconButton(onClick = { onStartCall(true) }) {
-                        Icon(imageVector = Icons.Default.Videocam, contentDescription = "مكالمة مرئية WebRTC")
+                        Icon(imageVector = Icons.Default.Videocam, contentDescription = "مكالمة مرئية (محاكاة)")
                     }
 
                     // Encryption toggler icon indicator
@@ -184,7 +184,7 @@ fun ChatDetailScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (showDecrypted) 
-                            "المحادثة مشفرة بالكامل (E2EE) ببروتوكول Double Ratchet 🛡️" 
+                            "تشفير محلي AES-256-GCM (تجريبي) 🛡️ — E2EE الحقيقي (Signal) في Phase 3" 
                             else "تنبيه: أنت تعرض الآن البيانات الخام (المشفرة في SQLite) 🔒",
                         fontSize = 11.sp,
                         color = if (showDecrypted) MaterialTheme.colorScheme.primary else Color(0xFFFBBF24),
@@ -734,7 +734,7 @@ fun SecurityDetailsDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "بروتوكول نهاية لنهاية (End-to-End Encryption) نشط بنجاح مع جهة الاتصال: ${user.fullName}",
+                    text = "تشفير محلي AES-256-GCM (تجريبي) نشط مع: ${user.fullName} — E2EE الحقيقي (Signal) قيد التطوير.",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -768,7 +768,7 @@ fun SecurityDetailsDialog(
                 }
                 
                 Text(
-                    text = "تحقق من تطابق هذا الرقم مع الطرف الآخر لتجنب هجمات Man-In-The-Middle وضمان تشفير تام وفوري للمكالمات والملفات المتبادلة.",
+                    text = "تحقق من تطابق هذه البصمة عبر قناة خارجية لتجنب هجمات Man-In-The-Middle. هذه بصمة تجريبية (SHA-256) — ستُستبدل ببصمة Signal الحقيقية في Phase 3.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )

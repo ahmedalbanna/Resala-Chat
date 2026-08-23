@@ -8,14 +8,14 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.aistudio.resalachat.vjqkzp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.0.1-phase0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -23,28 +23,45 @@ android {
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      // Only configure storeFile if file actually exists to avoid config-time crash when key not present (CI)
+      val ksFile = file(keystorePath)
+      if (ksFile.exists()) {
+        storeFile = ksFile
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyPassword = System.getenv("KEY_PASSWORD")
+      }
     }
+    // Debug keystore is intentionally NOT committed (see .gitignore). AGP will auto-generate
+    // a debug keystore at $HOME/.android/debug.keystore if missing. Keep custom debugConfig
+    // only when local debug.keystore file exists (legacy AI Studio import).
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      val dbg = file("${rootDir}/debug.keystore")
+      if (dbg.exists()) {
+        storeFile = dbg
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // Phase 0 hardening: enable R8 for release (was false). Keep optimize rules.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // Use release signing only if configured; otherwise unsigned (CI will inject via env)
+      val releaseCfg = signingConfigs.getByName("release")
+      signingConfig = if (releaseCfg.storeFile?.exists() == true) releaseCfg else null
     }
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      isMinifyEnabled = false
+      // Use custom debugConfig only if file exists, else AGP default debug keystore
+      val dbgCfg = signingConfigs.getByName("debugConfig")
+      signingConfig = if (dbgCfg.storeFile?.exists() == true) dbgCfg else null
     }
   }
   compileOptions {
@@ -58,8 +75,9 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
+// Secrets Gradle Plugin: .env / .env.example
+// Phase 0: GEMINI_API_KEY is unused (mock E2EE only). Kept for Phase 2 (Firebase AI) so builds
+// don't fail when .env missing — defaultPropertiesFileName provides placeholder.
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
@@ -83,6 +101,7 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.security.crypto)
   // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)

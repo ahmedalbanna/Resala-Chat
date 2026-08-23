@@ -1,13 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
--->
+<?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Phase 0 hardening: exclude encrypted DB and secure prefs from auto-backup to avoid plaintext cloud copies -->
+    <exclude domain="database" path="resala_secure_db" />
+    <exclude domain="database" path="resala_secure_db-wal" />
+    <exclude domain="database" path="resala_secure_db-shm" />
+    <exclude domain="sharedpref" path="resala_secure_prefs.xml" />
 </full-backup-content>

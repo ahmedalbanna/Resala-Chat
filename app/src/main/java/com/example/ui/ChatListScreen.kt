@@ -495,7 +495,7 @@ fun AddContactDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "أدخل اسم جهة الاتصال ورقم الهاتف. سيقوم النظام لتوليد مفتاح RSA/Signal عام فريد ديناميكياً لتشفير الرسائل تفعيلاً متكاملاً (E2EE).",
+                    "أدخل اسم جهة الاتصال ورقم الهاتف. سيُولّد النظام مفتاح هوية محلي (AES-256-GCM تجريبي) لتشفير الرسائل محلياً. التشفير الحقيقي E2EE (Signal) قيد التطوير في Phase 3.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -59,7 +59,7 @@ fun CallingScreen(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "اتصال آمن WebRTC P2P 🛡️",
+                            text = "محاكي اتصال آمن (تجريبي) 🛡️",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF10B981)
@@ -94,7 +94,7 @@ fun CallingScreen(
                 }
             }
 
-            // Central Portrait Avatar / Mirror Video Card Simulation
+            // Central Portrait Avatar / Mirror Video Card Simulation (Phase 0: no real WebRTC yet)
             Box(
                 modifier = Modifier
                     .size(180.dp)
@@ -103,10 +103,10 @@ fun CallingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (callState.isVideo) {
-                    // Simulated WebRTC Local/Remote Video stream camera feedback
+                    // Simulated local preview placeholder (real WebRTC in Phase 3)
                     Icon(
                         imageVector = Icons.Default.Face,
-                        contentDescription = "بث الفيديو نشط",
+                        contentDescription = "بث الفيديو (محاكاة)",
                         tint = Color(0xFF34D399),
                         modifier = Modifier.size(72.dp)
                     )
@@ -186,7 +186,7 @@ fun CallingScreen(
                 }
                 
                 Text(
-                    text = "بروتوكول بث الفيديو والتواصل الصوتي مأخوذ من بروتوكول الكود المفتوح WebRTC P2P",
+                    text = "عرض تجريبي لمحاكي المكالمات — WebRTC P2P الحقيقي قيد التطوير (Phase 3). لا يتم نقل صوت/فيديو حقيقي حالياً.",
                     fontSize = 10.sp,
                     color = Color.White.copy(alpha = 0.4f),
                     textAlign = TextAlign.Center,

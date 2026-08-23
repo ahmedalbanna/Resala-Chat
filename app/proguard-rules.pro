@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Phase 0 hardening: keep Room entities and Security Crypto
+-keep class com.example.data.** { *; }
+-keep class androidx.room.** { *; }
+-keep class androidx.security.crypto.** { *; }
+-dontwarn androidx.security.crypto.**

@@ -231,7 +231,7 @@ fun WideScreenWelcomeSplash() {
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "ترميز Double Ratchet + WebRTC نشط ومحمي محلياً",
+                        text = "تشفير AES-256-GCM محلي (تجريبي) + محاكي مكالمات",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

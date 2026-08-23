@@ -42,7 +42,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _typingChats = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val typingChats = _typingChats.asStateFlow()
 
-    // Live WebRTC calling simulator state
+    // Simulated calling state (Phase 0 mock — real WebRTC in Phase 3)
     private val _activeCallState = MutableStateFlow<CallState?>(null)
     val activeCallState = _activeCallState.asStateFlow()
 
@@ -282,19 +282,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Call Simulator Controls
+    // Call Simulator Controls (Phase 0 mock)
     fun startCall(peerName: String, isVideo: Boolean) {
         _activeCallState.value = CallState(
             peerName = peerName,
             isVideo = isVideo,
-            status = "جاري الاتصال الآمن WebRTC... 🔒",
+            status = "جاري الاتصال (محاكاة) ... 🔒",
             durationSecs = 0,
             activeMedia = true
         )
         // Simulate peer answering after 2 seconds, counting duration
         viewModelScope.launch {
             delay(2000)
-            _activeCallState.value = _activeCallState.value?.copy(status = "متصل - تشفير مباشر P2P 🛡️")
+            _activeCallState.value = _activeCallState.value?.copy(status = "متصل (محاكي) — تشفير محلي 🛡️")
             while (_activeCallState.value != null) {
                 delay(1000)
                 _activeCallState.value = _activeCallState.value?.let {
@@ -345,10 +345,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     "يا لها من لقطة مشفرة رائعة! 🏞️ تم فك تشفير وسائطك المخزنة محلياً بالكامل."
                 }
                 userText.contains("تشفير") || userText.contains("أمان") || userText.contains("امن") -> {
-                    "نعم! نستخدم بروتوكول Signal (Double Ratchet + Curve25519) لتحديث مفاتيح الرسائل باستمرار. حتى لو تم التقاط حزمة، لن يقرأها أحد! 🛡️"
+                    "حالياً نستخدم تشفير محلي AES-256-GCM تجريبي لكل جهة اتصال (IV عشوائي لكل رسالة). بروتوكول Signal الحقيقي (Double Ratchet + Curve25519) قيد التطوير في Phase 3 وسيحل محله — لا نعتمد عليه أمنياً بعد. 🛡️"
                 }
                 userText.contains("مكالمة") || userText.contains("اتصال") || userText.contains("فيديو") -> {
-                    "جرب استخدام أيقونات الهاتف 📞 والكاميرا 📹 في شريط العنوان بالأعلى لتجربة محاكي مكالمات WebRTC الصوتية والمرئية المشفرة!"
+                    "تلك الأيقونات تشغل حالياً محاكي مكالمات محلي فقط (بدون WebRTC حقيقي). سيتم ربط WebRTC P2P المشفر في Phase 3! 📞"
                 }
                 else -> {
                     "تم استلام رسالتك المشفرة بنجاح 🛡️ بموجب خوارزمية التشفير الحامية، تم استخدام مفتاح فريد لفك تشفيرها في واجهتي فقط. أخبرني المزيد!"
@@ -379,7 +379,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-// State representing WebRTC simulated call
+// State representing simulated call (Phase 0) — real WebRTC in Phase 3
 data class CallState(
     val peerName: String,
     val isVideo: Boolean,
