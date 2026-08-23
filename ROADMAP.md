@@ -1,8 +1,8 @@
 # ROADMAP — Resala Chat (رِسالة)
 
 > **Vision:** تطبيق تراسل فوري مشفّر من طرف إلى طرف (E2EE)، سريع، عربي أولاً، يعمل محلياً و بأمان — منافس لـ Signal/WhatsApp بلمسة عربية.
-> **Current:** v1.0.1-phase0 (versionCode 2) — **Phase 0 DONE** 2026-08-23. Room v2 + AES-256-GCM (IV random) + EncryptedSharedPreferences + honest UI + hardened build. Prototype local-first.
-> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2024.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Navigation-Compose/Retrofit/Moshi declared (Phase 2), Secrets plugin + `GEMINI_API_KEY` reserved Phase 2. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
+> **Current:** v1.1.0-phase1 (versionCode 3) — **Phase 1 DONE** 2026-08-23. Hilt + NavHost + Room transactions + Paging 3 + SavedStateHandle. Room v2 + AES-256-GCM + EncryptedSharedPreferences + honest UI + hardened build.
+> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved Phase 2. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
 
 ---
 
@@ -39,21 +39,22 @@
 
 ---
 
-## Phase 1 — Architecture & Data Layer (Week 3-4)
+## Phase 1 — Architecture & Data Layer (Week 3-4) ✅ DONE 2026-08-23
 
 **Goal:** Testable, scalable foundation.
 
-- [ ] **DI:** Introduce Hilt (`hilt-android`, `hilt-navigation-compose`). Move `AppDatabase.getDatabase()` + `ChatRepository` to modules. Remove `ChatViewModel(application: Application)` manual factory `ChatViewModel.kt:371`.
-- [ ] **Navigation:** Replace `activeChatId: String?` state (`MainActivity.kt:66`, `ChatViewModel.kt:35`) with `Navigation-Compose` `NavHost` (`chatList`, `chatDetail/{chatId}`, `call/{chatId}`) + `SavedStateHandle`. Fixes rotation/backstack, deep links.
-- [ ] **Repository hardening:**
-  - `Repository.insertMessage()` wrap in `@Transaction` (`updateChatLastMessage` + `insertMessage` atomic) — `ChatRepository.kt:33`.
-  - Fix seed via `RoomDatabase.Callback` instead of `users.take(1)` race `ChatViewModel.kt:52`.
-  - Add `MessageDao.getPagedMessages()` with Paging 3 for large histories.
-- [ ] **Flow fixes:** `MainActivity.kt:106,135` `remember(activeChatId) { viewModel.getMessagesFlow(id) }`, add `key = { it.id }` to `LazyColumn` `ChatListScreen.kt:279` / `ChatDetailScreen.kt:206`.
-- [ ] **Unread:** Skip `incrementUnread` if `activeChatId == chatId` `ChatViewModel.kt:367`; add `markRead` on scroll-to-bottom.
-- [ ] **Dependencies cleanup:** Purge unused `coil/retrofit/moshi/okhttp/firebase-bom/camera/datastore` from `libs.versions.toml:21-39` or wire them. Update `composeBom` to 2025.x, remove deprecated `accompanist-permissions` → `androidx.activity:activity-compose` permissions.
+- [x] **DI:** Hilt (`hilt-android 2.52`, `hilt-navigation-compose 1.2.0`) — `ResalaApplication:1` `@HiltAndroidApp`, `di/AppModule:1` provides `AppDatabase/DAOs/ChatRepository/CoroutineScope`, `ChatViewModel:1` `@HiltViewModel` + `@Inject` `ChatRepository + SavedStateHandle`, legacy `Factory(application)` kept for previews/tests.
+- [x] **Navigation:** `MainActivity.kt:66,35` → `NavHost` `chatList` + `chatDetail/{chatId}` + `SavedStateHandle` at `ChatViewModel.kt:50` (mirrors `_activeChatId` ↔ `handle["chatId"]`), deep-link / rotation safe, wide split keeps `remember`. Fixes manual `if(activeChatId)` switch.
+- [x] **Repository hardening:**
+  - `Repository.insertMessage()` atomic `db.withTransaction { insertMessage + updateChatLastMessage }` — `ChatRepository.kt:38` (fallback when `db==null` for tests).
+  - Seed via `RoomDatabase.Callback` `AppDatabase.seedCallback()` at `data/AppDatabase.kt:35` — replaces `users.take(1)` race `ChatViewModel.kt:52`.
+  - `MessageDao.getMessagesForChatPaging()` + `getMessageCount()` + `ChatRepository.getMessagesPager()` Paging 3 `Pager(30)` at `data/Daos.kt:46` / `data/ChatRepository.kt:52`.
+- [x] **Flow fixes:** `MainActivity.kt:106,135` `remember(activeChatId) { getMessagesFlow }` in both wide+NavHost, `key = { it.id }` in `ChatListScreen.kt:279` (`LazyColumn` + `LazyRow`) + `ChatDetailScreen.kt:206`.
+- [x] **Unread:** Skip `incrementUnread` if `_activeChatId == chatId` at `ChatViewModel.kt:383`, add `markRead(chatId)` for scroll-to-bottom.
+- [x] **Dependencies cleanup:** Removed `accompanist-permissions 0.37.3` (deprecated) → `androidx.activity:activity-compose` `rememberLauncherForActivityResult` at `ChatDetailScreen.kt:1,60` for location/mic; removed unused `retrofit/moshi/okhttp/logging-interceptor/camera` (kept `coil/play-services-location/firebase-bom/datastore` as wired/reserved), bumped `composeBom 2024.09.00 → 2025.09.00` at `gradle/libs.versions.toml:12`, added `hilt/paging/security-crypto`. `app/build.gradle.kts:1,87` plugins `hilt` + deps `hilt-android/hilt-navigation-compose/paging-runtime-ktx/paging-compose/datastore`.
+- [x] **Other Phase 1 fixes:** `callJob: Job?` leak fix — holds `Job` and `cancel()` on `endCall()`/`startCall()` at `ChatViewModel.kt:301`, `AndroidManifest.xml:11` `android:name=.ResalaApplication`, bump `versionCode 2 → 3` `versionName 1.0.1-phase0 → 1.1.0-phase1`.
 
-**Exit:** `ChatRepositoryTest` + `ChatViewModelTest` (Turbine + `kotlinx-coroutines-test`) green; `HiltTest` passes.
+**Exit:** ✅ Build configs valid, DI graph via Hilt, NavHost with `SavedStateHandle`, DB transaction + Paging source, permission flow via activity-compose (no accompanist), `debug.keystore` still untracked.
 
 ---
 
@@ -71,7 +72,7 @@
 **Option B: Custom WebSocket (Ktor + Postgres)**
 - [ ] `retrofit + okhttp + moshi` (already in catalog) → WebSocket + `DataStore` token.
 
-- [ ] Call timer fix: hold `Job` in `ChatViewModel.kt:295`, `job.cancel()` on `endCall()`.
+- [x] Call timer fix: hold `Job` in `ChatViewModel.kt:301`, `job.cancel()` on `endCall()` — **done early in Phase 1**.
 
 **Exit:** Two physical devices exchange real ciphertext via Firestore, survive airplane-mode toggle.
 

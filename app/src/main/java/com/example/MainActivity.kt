@@ -2,14 +2,12 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
@@ -17,33 +15,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.data.Chat
-import com.example.data.User
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                // Initialize modern Chat ViewModel with constructor injection
-                val viewModel: ChatViewModel = viewModel(
-                    factory = ChatViewModel.Factory(application)
-                )
+                // Phase 1: HiltViewModel + Navigation
+                val viewModel: ChatViewModel = hiltViewModel()
 
                 val callState by viewModel.activeCallState.collectAsState()
 
                 if (callState != null) {
-                    // Full screen calling overlay if call is active
                     CallingScreen(
                         callState = callState!!,
                         onMuteToggle = { viewModel.toggleMuteCall() },
@@ -51,7 +50,6 @@ class MainActivity : ComponentActivity() {
                         onEndCall = { viewModel.endCall() }
                     )
                 } else {
-                    // Main layout controller
                     MainAppLayout(viewModel)
                 }
             }
@@ -72,7 +70,7 @@ fun MainAppLayout(viewModel: ChatViewModel) {
     val isWideScreen = screenWidthDp > 600
 
     if (isWideScreen) {
-        // Expanded layout: List-Detail Side-By-Side canonical split screen
+        // Expanded: List-Detail split, NavController not needed but keep ViewModel sync
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -92,7 +90,6 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                 )
             }
 
-            // Vertical line divider
             VerticalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 0.5.dp)
 
             Box(
@@ -103,7 +100,8 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                 if (activeChatId != null) {
                     val activeChat = chats.find { it.id == activeChatId }
                     val activeUser = users.find { it.id == activeChat?.peerId }
-                    val messagesFlow = viewModel.getMessagesFlow(activeChatId!!)
+                    // Phase 1 fix: remember flow to avoid recreation on every recomposition
+                    val messagesFlow = remember(activeChatId) { viewModel.getMessagesFlow(activeChatId!!) }
                     val messages by messagesFlow.collectAsState(initial = emptyList())
 
                     if (activeUser != null && activeChat != null) {
@@ -122,51 +120,86 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                         )
                     }
                 } else {
-                    // Split screen static placeholder
                     WideScreenWelcomeSplash()
                 }
             }
         }
     } else {
-        // Compact layout (Phone default view): Switch pages single view layout
-        if (activeChatId != null) {
-            val activeChat = chats.find { it.id == activeChatId }
-            val activeUser = users.find { it.id == activeChat?.peerId }
-            val messagesFlow = viewModel.getMessagesFlow(activeChatId!!)
-            val messages by messagesFlow.collectAsState(initial = emptyList())
+        // Compact: NavHost with SavedStateHandle (Phase 1) — replaces manual if(activeChatId) switch
+        val navController = rememberNavController()
 
-            if (activeUser != null && activeChat != null) {
-                // Back navigation gesture controller
-                BackHandler {
-                    viewModel.setActiveChat(null)
+        // Sync ViewModel activeChatId <-> NavController for rotation/deep-link
+        LaunchedEffect(activeChatId) {
+            val dest = navController.currentDestination?.route
+            if (activeChatId != null && dest == "chatList") {
+                navController.navigate("chatDetail/${activeChatId}") {
+                    launchSingleTop = true
                 }
+            } else if (activeChatId == null && dest?.startsWith("chatDetail") == true) {
+                navController.popBackStack("chatList", inclusive = false)
+            }
+        }
 
-                ChatDetailScreen(
-                    user = activeUser,
-                    messages = messages,
-                    isTyping = typingChats[activeChatId!!] ?: false,
+        NavHost(
+            navController = navController,
+            startDestination = "chatList",
+            modifier = Modifier.fillMaxSize()
+        ) {
+            composable("chatList") {
+                ChatListScreen(
+                    chats = chats,
+                    users = users,
+                    activeChatId = activeChatId,
+                    typingChats = typingChats,
                     showDecrypted = showDecrypted,
-                    onSendMessage = { viewModel.sendTextMessage(activeChatId!!, it, activeUser.publicKey) },
-                    onSendLocation = { lat, lng -> viewModel.sendLocationMessage(activeChatId!!, lat, lng, activeUser.publicKey) },
-                    onSendImage = { resName -> viewModel.sendImageMessage(activeChatId!!, resName, activeUser.publicKey) },
-                    onSendVoice = { duration -> viewModel.sendVoiceMessage(activeChatId!!, duration, activeUser.publicKey) },
-                    onStartCall = { isVid -> viewModel.startCall(activeUser.fullName, isVid) },
-                    onBack = { viewModel.setActiveChat(null) },
+                    onChatSelected = { chatId ->
+                        viewModel.setActiveChat(chatId)
+                        navController.navigate("chatDetail/$chatId")
+                    },
+                    onStartNewChat = { user ->
+                        val chatId = viewModel.startChatWithUser(user)
+                        viewModel.setActiveChat(chatId)
+                        navController.navigate("chatDetail/$chatId")
+                    },
+                    onAddContact = { name, phone, bio -> viewModel.createContactAndStartChat(name, phone, bio) },
                     onToggleDecrypted = { viewModel.toggleDecryptedView() }
                 )
             }
-        } else {
-            ChatListScreen(
-                chats = chats,
-                users = users,
-                activeChatId = activeChatId,
-                typingChats = typingChats,
-                showDecrypted = showDecrypted,
-                onChatSelected = { viewModel.setActiveChat(it) },
-                onStartNewChat = { viewModel.startChatWithUser(it) },
-                onAddContact = { name, phone, bio -> viewModel.createContactAndStartChat(name, phone, bio) },
-                onToggleDecrypted = { viewModel.toggleDecryptedView() }
-            )
+            composable(
+                "chatDetail/{chatId}",
+                arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+            ) { backStack ->
+                val chatId = backStack.arguments?.getString("chatId") ?: activeChatId
+                // Keep ViewModel in sync with nav arg (deep link)
+                LaunchedEffect(chatId) { if (chatId != null) viewModel.setActiveChat(chatId) }
+
+                if (chatId != null) {
+                    val activeChat = chats.find { it.id == chatId }
+                    val activeUser = users.find { it.id == activeChat?.peerId }
+                    // Phase 1 fix: remember + keys
+                    val messagesFlow = remember(chatId) { viewModel.getMessagesFlow(chatId) }
+                    val messages by messagesFlow.collectAsState(initial = emptyList())
+
+                    if (activeUser != null && activeChat != null) {
+                        ChatDetailScreen(
+                            user = activeUser,
+                            messages = messages,
+                            isTyping = typingChats[chatId] ?: false,
+                            showDecrypted = showDecrypted,
+                            onSendMessage = { viewModel.sendTextMessage(chatId, it, activeUser.publicKey) },
+                            onSendLocation = { lat, lng -> viewModel.sendLocationMessage(chatId, lat, lng, activeUser.publicKey) },
+                            onSendImage = { resName -> viewModel.sendImageMessage(chatId, resName, activeUser.publicKey) },
+                            onSendVoice = { duration -> viewModel.sendVoiceMessage(chatId, duration, activeUser.publicKey) },
+                            onStartCall = { isVid -> viewModel.startCall(activeUser.fullName, isVid) },
+                            onBack = {
+                                viewModel.setActiveChat(null)
+                                navController.popBackStack()
+                            },
+                            onToggleDecrypted = { viewModel.toggleDecryptedView() }
+                        )
+                    }
+                }
+            }
         }
     }
 }

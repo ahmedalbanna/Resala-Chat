@@ -227,7 +227,7 @@ fun ChatListScreen(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(users) { contact ->
+                items(users, key = { it.id }) { contact ->
                     ContactHeaderItem(
                         contact = contact,
                         onClick = { onStartNewChat(contact) }
@@ -276,7 +276,7 @@ fun ChatListScreen(
                         .weight(1f),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
                 ) {
-                    items(filteredChats) { chat ->
+                    items(filteredChats, key = { it.id }) { chat ->
                         val isTyping = typingChats[chat.id] ?: false
                         val isActive = chat.id == activeChatId
                         

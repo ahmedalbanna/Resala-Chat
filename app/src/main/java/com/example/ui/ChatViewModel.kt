@@ -1,22 +1,38 @@
 package com.example.ui
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import com.example.data.*
 import com.example.util.EncryptionEngine
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.UUID
 
-class ChatViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class ChatViewModel @Inject constructor(
+    private val repository: ChatRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val db = AppDatabase.getDatabase(application)
-    private val repository = ChatRepository(db.userDao(), db.chatDao(), db.messageDao())
+    // Legacy constructor for previews/tests without Hilt (Phase 1 backward compat)
+    constructor(application: Application) : this(
+        repository = ChatRepository(
+            db = AppDatabase.getDatabase(application),
+            userDao = AppDatabase.getDatabase(application).userDao(),
+            chatDao = AppDatabase.getDatabase(application).chatDao(),
+            messageDao = AppDatabase.getDatabase(application).messageDao()
+        ),
+        savedStateHandle = SavedStateHandle()
+    )
 
     // UI States
     val users: StateFlow<List<User>> = repository.allUsers.stateIn(
@@ -46,107 +62,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeCallState = MutableStateFlow<CallState?>(null)
     val activeCallState = _activeCallState.asStateFlow()
 
+    // Phase 1: activeChatId mirrored to SavedStateHandle for process death + NavHost
     init {
-        // Prepopulate users and chats if database is empty
+        // Restore active chat from SavedStateHandle (NavHost deep link / rotation)
+        savedStateHandle.get<String>("chatId")?.let { _activeChatId.value = it }
+        // Keep handle in sync when _activeChatId changes
         viewModelScope.launch {
-            users.take(1).collect { existingUsers ->
-                if (existingUsers.isEmpty()) {
-                    seedDatabase()
-                }
+            _activeChatId.collect { id ->
+                if (id != null) savedStateHandle["chatId"] = id else savedStateHandle.remove<String>("chatId")
             }
         }
+        // Seeding now handled by AppDatabase seedCallback — no ViewModel race.
     }
 
-    private suspend fun seedDatabase() {
-        val seedUsers = listOf(
-            User(
-                id = "user_bot",
-                fullName = "المساعد الذكي المشفر 🤖",
-                phone = "+966 54 000 0000",
-                bio = "روبوت ذكي للرد التلقائي وإثبات التشفير الفوري",
-                publicKey = "IK-robo-secure-bot-key-83ad",
-                isFavorite = true,
-                lastSeen = "متصل الآن"
-            ),
-            User(
-                id = "user_mona",
-                fullName = "منى الكردي 🛡️",
-                phone = "+966 50 123 4567",
-                bio = "متوفرة | مفتاح الهوية المعتمد نشط",
-                publicKey = "IK-98df-892c-bef4-c321",
-                isFavorite = true,
-                lastSeen = "نشط منذ ٤ د"
-            ),
-            User(
-                id = "user_khaled",
-                fullName = "المهندس خالد ⚙️",
-                phone = "+966 55 987 6543",
-                bio = "في اجتماع آمن مغلق 🔒 المراسلة مشفرة",
-                publicKey = "IK-a47f-8be3-91cd-fb92",
-                isFavorite = false,
-                lastSeen = "متصل الآن"
-            ),
-            User(
-                id = "user_sulaiman",
-                fullName = "سليمان الفهيد 🏡",
-                phone = "+966 53 456 7890",
-                bio = "تراسل معي لحماية خصوصيتك",
-                publicKey = "IK-38bc-9fdb-4328-da62",
-                isFavorite = false,
-                lastSeen = "نشط أمس"
-            )
-        )
-        repository.insertUsers(seedUsers)
-
-        // Seed initial conversations (chats)
-        val chatBot = Chat(
-            id = "chat_user_bot",
-            peerId = "user_bot",
-            peerName = "المساعد الذكي المشفر 🤖",
-            lastMessageText = "دردشة مشفرة تامة (End-to-End)",
-            lastMessageTime = System.currentTimeMillis() - 7200000,
-            unreadCount = 1
-        )
-        val chatMona = Chat(
-            id = "chat_user_mona",
-            peerId = "user_mona",
-            peerName = "منى الكردي 🛡️",
-            lastMessageText = "أهلاً بك! تم إنشاء الجلسة الآمنة بيننا بنجاح.",
-            lastMessageTime = System.currentTimeMillis() - 3600000,
-            unreadCount = 0
-        )
-
-        repository.insertChat(chatBot)
-        repository.insertChat(chatMona)
-
-        // Seed some initial encrypted messages to bot conversation
-        val msg1 = Message(
-            id = UUID.randomUUID().toString(),
-            chatId = "chat_user_bot",
-            senderId = "user_bot",
-            contentCipher = EncryptionEngine.encrypt("أهلاً بك في رِسالة! 👋 هذا التطبيق مشفر بالكامل ببروتوكول يحمي بياناتك محلياً وفي السقيفة السحابية. جرّب إرسال نصوص، رسائل صوتية، أو مواقع جغرافية، أو تجربة المكالمات الآمنة!", "IK-robo-secure-bot-key-83ad"),
-            timestamp = System.currentTimeMillis() - 7200000
-        )
-        val msg2 = Message(
-            id = UUID.randomUUID().toString(),
-            chatId = "chat_user_mona",
-            senderId = "user_mona",
-            contentCipher = EncryptionEngine.encrypt("أهلاً بك! تم إنشاء الجلسة الآمنة بيننا بنجاح.", "IK-98df-892c-bef4-c321"),
-            timestamp = System.currentTimeMillis() - 3600000
-        )
-
-        db.messageDao().insertMessage(msg1)
-        db.messageDao().insertMessage(msg2)
-    }
-
-    // Navigation and chat activation
+    // Navigation and chat activation — also clears unread + updates SavedStateHandle
     fun setActiveChat(chatId: String?) {
         _activeChatId.value = chatId
         if (chatId != null) {
+            savedStateHandle["chatId"] = chatId
             viewModelScope.launch {
                 repository.clearUnread(chatId)
             }
+        } else {
+            savedStateHandle.remove<String>("chatId")
         }
+    }
+
+    /** Phase 1 fix: mark read on scroll-to-bottom (called from ChatDetail) */
+    fun markRead(chatId: String) {
+        viewModelScope.launch { repository.clearUnread(chatId) }
     }
 
     fun toggleDecryptedView() {
@@ -178,9 +122,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return name.replace(Regex("[\uD83C-\uDBFF\uDC00-\uDFFF]"), "").trim()
     }
 
-    // Get live messages flow
+    // Get live messages flow (simple) + Paging 3 flow (Phase 1)
     fun getMessagesFlow(chatId: String): Flow<List<Message>> {
         return repository.getMessagesForChat(chatId)
+    }
+
+    fun getMessagesPager(chatId: String): Flow<PagingData<Message>> {
+        return repository.getMessagesPager(chatId).cachedIn(viewModelScope)
     }
 
     // Add a custom user/contact
@@ -282,8 +230,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Call Simulator Controls (Phase 0 mock)
+    // Phase 1 fix: hold Job so while loop cancels on endCall (was leaking)
+    private var callJob: Job? = null
+
+    // Call Simulator Controls (Phase 0 mock, Phase 1 leak fixed)
     fun startCall(peerName: String, isVideo: Boolean) {
+        callJob?.cancel()
         _activeCallState.value = CallState(
             peerName = peerName,
             isVideo = isVideo,
@@ -291,8 +243,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             durationSecs = 0,
             activeMedia = true
         )
-        // Simulate peer answering after 2 seconds, counting duration
-        viewModelScope.launch {
+        callJob = viewModelScope.launch {
             delay(2000)
             _activeCallState.value = _activeCallState.value?.copy(status = "متصل (محاكي) — تشفير محلي 🛡️")
             while (_activeCallState.value != null) {
@@ -317,6 +268,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun endCall() {
+        callJob?.cancel()
+        callJob = null
         _activeCallState.value = null
     }
 
@@ -364,7 +317,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(replyMsg)
-            repository.incrementUnread(chatId)
+            // Phase 1 fix: don't increment if user is currently viewing that chat (already cleared)
+            if (_activeChatId.value != chatId) {
+                repository.incrementUnread(chatId)
+            }
         }
     }
 

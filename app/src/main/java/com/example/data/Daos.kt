@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.paging.PagingSource
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
@@ -46,6 +47,13 @@ interface ChatDao {
 interface MessageDao {
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp ASC")
     fun getMessagesForChat(chatId: String): Flow<List<Message>>
+
+    // Phase 1: Paging 3 for large histories (used by ChatViewModel.getMessagesPager)
+    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp ASC")
+    fun getMessagesForChatPaging(chatId: String): PagingSource<Int, Message>
+
+    @Query("SELECT COUNT(*) FROM messages WHERE chatId = :chatId")
+    suspend fun getMessageCount(chatId: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: Message)

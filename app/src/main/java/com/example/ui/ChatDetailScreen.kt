@@ -30,6 +30,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.example.data.Message
 import com.example.data.User
 import com.example.util.EncryptionEngine
@@ -59,6 +65,23 @@ fun ChatDetailScreen(
     
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Phase 1: use androidx.activity permissions (replaces deprecated accompanist)
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val lat = 24.7136 + (Math.random() - 0.5) * 0.05
+            val lng = 46.6753 + (Math.random() - 0.5) * 0.05
+            onSendLocation(miyadhFormatted(lat), miyadhFormatted(lng))
+        }
+    }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) isRecordingVoicenote = true
+    }
 
     // Scroll to bottom when new messages arrive
     LaunchedEffect(messages.size, isTyping) {
@@ -193,7 +216,7 @@ fun ChatDetailScreen(
                 }
             }
 
-            // Messages Container
+            // Messages Container — Phase 1: key = msg.id for stable recomposition
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -203,7 +226,7 @@ fun ChatDetailScreen(
                 contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(messages) { msg ->
+                items(messages, key = { it.id }) { msg ->
                     MessageBubbleItem(
                         msg = msg,
                         peerPublicKey = user.publicKey,
@@ -312,10 +335,17 @@ fun ChatDetailScreen(
 
                                 IconButton(
                                     onClick = {
-                                        // Send a randomized secure coordinates location (e.g. around Riyadh, Saudi Arabia)
-                                        val riyadhLat = 24.7136 + (Math.random() - 0.5) * 0.05
-                                        val riyadhLng = 46.6753 + (Math.random() - 0.5) * 0.05
-                                        onSendLocation(miyadhFormatted(riyadhLat), miyadhFormatted(riyadhLng))
+                                        // Phase 1: runtime permission check (androidx.activity)
+                                        val hasPerm = ContextCompat.checkSelfPermission(
+                                            context, Manifest.permission.ACCESS_FINE_LOCATION
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                        if (hasPerm) {
+                                            val riyadhLat = 24.7136 + (Math.random() - 0.5) * 0.05
+                                            val riyadhLng = 46.6753 + (Math.random() - 0.5) * 0.05
+                                            onSendLocation(miyadhFormatted(riyadhLat), miyadhFormatted(riyadhLng))
+                                        } else {
+                                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        }
                                     }
                                 ) {
                                     Icon(
@@ -361,7 +391,13 @@ fun ChatDetailScreen(
                                     }
                                 } else {
                                     IconButton(
-                                        onClick = { isRecordingVoicenote = true }
+                                        onClick = {
+                                            val hasMic = ContextCompat.checkSelfPermission(
+                                                context, Manifest.permission.RECORD_AUDIO
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (hasMic) isRecordingVoicenote = true
+                                            else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Mic,
