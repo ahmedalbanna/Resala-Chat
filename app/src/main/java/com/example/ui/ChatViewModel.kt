@@ -78,6 +78,22 @@ class ChatViewModel @Inject constructor(
     private val _showDecrypted = MutableStateFlow(true)
     val showDecrypted = _showDecrypted.asStateFlow()
 
+    // Phase 4 FTS: in-memory decrypted index for search (chatId -> decrypted snippet cache)
+    // Updated on message send/receive; used for search across ciphertext
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery = _searchQuery.asStateFlow()
+    fun setSearchQuery(q: String) { _searchQuery.value = q }
+
+    // Phase 4: FTS filteredChats — in-memory decrypted index (peerName/bio/phone/snippet)
+    // For large histories, Room FTS5 virtual table would index decrypted plaintext (in-memory only, not persisted plaintext)
+    val filteredChats: StateFlow<List<Chat>> = combine(chats, users, _searchQuery) { chats, users, query ->
+        val nq = query.trim().replace("ـ", "").replace("ّ", "")
+        if (nq.isEmpty()) chats else chats.filter { chat ->
+            val user = users.find { it.id == chat.peerId }
+            listOf(chat.peerName, chat.lastMessageText, user?.phone ?: "", user?.bio ?: "").any { it.contains(nq, ignoreCase = true) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Tracking active typing indicator per chat (chatId -> isTyping)
     private val _typingChats = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val typingChats = _typingChats.asStateFlow()

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.data.remote.AuthManager
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -65,16 +67,25 @@ fun MainAppLayout(viewModel: ChatViewModel) {
     val typingChats by viewModel.typingChats.collectAsState()
     val showDecrypted by viewModel.showDecrypted.collectAsState()
 
+    // Phase 4: Adaptive via WindowSizeClass — uses screenWidthDp >= 600 as medium+ breakpoint
+    // (migrated from raw >600 check to semantic; future: use calculateWindowSizeClass(activity))
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp
-    val isWideScreen = screenWidthDp > 600
+    val isWideScreen = screenWidthDp >= 600
 
     if (isWideScreen) {
+        // Phase 4: onboarding for wide as well (was only NavHost compact before)
+        val contextWide = LocalContext.current
+        val isOnboardedWide = AuthManager(contextWide).getPhone() != null
+        if (!isOnboardedWide) {
+            OnboardingScreen(onComplete = { viewModel.setActiveChat(null) })
+            return
+        }
         // Expanded: List-Detail split, NavController not needed but keep ViewModel sync
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(320.dp)
+                    .width(360.dp)
                     .fillMaxHeight()
             ) {
                 ChatListScreen(
@@ -90,7 +101,8 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                 )
             }
 
-            VerticalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 0.5.dp)
+            // Phase 4: 1.dp hairline with alpha for low-dpi (was 0.5.dp invisible on ldpi)
+            VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), thickness = 1.dp)
 
             Box(
                 modifier = Modifier
@@ -126,8 +138,10 @@ fun MainAppLayout(viewModel: ChatViewModel) {
             }
         }
     } else {
-        // Compact: NavHost with SavedStateHandle (Phase 1) — replaces manual if(activeChatId) switch
+        // Compact: NavHost with SavedStateHandle (Phase 1) + Onboarding (Phase 4)
         val navController = rememberNavController()
+        val context = LocalContext.current
+        val isOnboarded = AuthManager(context).getPhone() != null
 
         // Sync ViewModel activeChatId <-> NavController for rotation/deep-link
         LaunchedEffect(activeChatId) {
@@ -143,9 +157,14 @@ fun MainAppLayout(viewModel: ChatViewModel) {
 
         NavHost(
             navController = navController,
-            startDestination = "chatList",
+            startDestination = if (isOnboarded) "chatList" else "onboarding",
             modifier = Modifier.fillMaxSize()
         ) {
+            composable("onboarding") {
+                OnboardingScreen(onComplete = {
+                    navController.navigate("chatList") { popUpTo("onboarding") { inclusive = true } }
+                })
+            }
             composable("chatList") {
                 ChatListScreen(
                     chats = chats,

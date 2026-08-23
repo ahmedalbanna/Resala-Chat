@@ -11,21 +11,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
+/**
+ * Phase 4: Refined dark scheme — tonal mapping from Vibrant, not ad-hoc.
+ * Keeps HUD midnight (#0A101A) but surfaces now have proper container hierarchy.
+ */
 private val DarkColorScheme =
   darkColorScheme(
-    primary = VibrantPrimary,
-    onPrimary = VibrantOnPrimary,
-    primaryContainer = VibrantPrimaryContainer,
-    onPrimaryContainer = VibrantOnPrimaryContainer,
+    primary = VibrantPrimaryDark,
+    onPrimary = VibrantOnPrimaryDark,
+    primaryContainer = VibrantPrimaryContainerDark,
+    onPrimaryContainer = VibrantOnPrimaryContainerDark,
     secondary = SecureGreen,
     onSecondary = Color.White,
-    background = Color(0xFF0A101A), // Dark Midnight Blue to keep call HUD and Dark UI premium
-    onBackground = Color(0xFFE3E2E6),
-    surface = Color(0xFF121B2D),
-    onSurface = Color(0xFFE3E2E6),
-    surfaceVariant = Color(0xFF192438),
-    onSurfaceVariant = Color(0xFF94A3B8),
-    error = AlertRed
+    secondaryContainer = SecureGreenContainer,
+    background = VibrantBackgroundDark,
+    onBackground = VibrantOnSurfaceDark,
+    surface = VibrantSurfaceDark,
+    onSurface = VibrantOnSurfaceDark,
+    surfaceVariant = VibrantSurfaceVariantDark,
+    onSurfaceVariant = VibrantOnSurfaceVariantDark,
+    surfaceContainer = VibrantSurfaceContainerDark,
+    outline = VibrantOutline,
+    outlineVariant = VibrantOutlineVariant,
+    error = AlertRed,
+    errorContainer = AlertRedContainer
   )
 
 private val LightColorScheme =
@@ -36,14 +45,18 @@ private val LightColorScheme =
     onPrimaryContainer = VibrantOnPrimaryContainer,
     secondary = SecureGreen,
     onSecondary = Color.White,
+    secondaryContainer = SecureGreenContainer,
     background = VibrantBackground,
     onBackground = VibrantOnSurface,
     surface = VibrantSurface,
     onSurface = VibrantOnSurface,
     surfaceVariant = VibrantSurfaceVariant,
     onSurfaceVariant = VibrantOnSurfaceVariant,
+    surfaceContainer = VibrantSurfaceVariant,
     outline = VibrantOutline,
-    error = AlertRed
+    outlineVariant = VibrantOutlineVariant,
+    error = AlertRed,
+    errorContainer = AlertRedContainer
   )
 
 @Composable

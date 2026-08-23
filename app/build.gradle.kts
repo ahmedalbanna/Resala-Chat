@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.resalachat.vjqkzp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.3.0-phase3"
+    versionCode = 6
+    versionName = "1.4.0-phase4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

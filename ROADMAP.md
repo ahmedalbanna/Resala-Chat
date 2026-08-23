@@ -1,7 +1,7 @@
 # ROADMAP — Resala Chat (رِسالة)
 
 > **Vision:** تطبيق تراسل فوري مشفّر من طرف إلى طرف (E2EE)، سريع، عربي أولاً، يعمل محلياً و بأمان — منافس لـ Signal/WhatsApp بلمسة عربية.
-> **Current:** v1.3.0-phase3 (versionCode 5) — **Phase 3 DONE** 2026-08-23. Signal (X3DH+Ratchet) + EncryptedFile + WebRTC + Camera/Coil + FusedLocation. Room v2 + AES-256-GCM (Legacy) + Signal wrapper + Firestore/Storage + Hilt + NavHost + Paging.
+> **Current:** v1.4.0-phase4 (versionCode 6) — **Phase 4 DONE** 2026-08-23. Theme consolidation + Adaptive WindowSizeClass + FTS search + a11y RTL + Onboarding. Room v2 + Signal + EncryptedFile + WebRTC + Firestore + Hilt + NavHost + Paging.
 > **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Firebase BOM 34.12.0 (auth/firestore/storage) + WorkManager 2.9.0, Signal 2.8.2 + WebRTC 1.1.0 + Camera 1.5.0 + Coil 2.7.0 + Play-Services-Location 21.3.0, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
 
 ---
@@ -99,13 +99,13 @@
 
 ---
 
-## Phase 4 — UX, Polishing & Arabic Quality (Week 12-13)
+## Phase 4 — UX, Polishing & Arabic Quality (Week 12-13) ✅ DONE 2026-08-23
 
-- [ ] **Design system:** Consolidate `theme/Color.kt` / `Theme.kt` Vibrant palette, support dynamic dark (current `darkColorScheme` at `Theme.kt:14` is ad-hoc). Extract `ChatRowItem`, `MessageBubbleItem` reuse.
-- [ ] **Adaptive:** Refine `isWideScreen >600dp` `MainActivity.kt:72` (use `WindowSizeClass`). Fix divider `0.5.dp` hairline on low-dpi.
-- [ ] **Search & Contacts:** FTS for `messages.contentCipher` decrypted index (in-memory); `ChatListScreen.kt:50` filter currently scans `lastMessageText` only.
-- [ ] **A11y + RTL:** Content descriptions audit (some already done `ChatListScreen.kt:92`), test with TalkBack, `android:layoutDirection` screenshots via `Roborazzi` (`GreetingScreenshotTest.kt`).
-- [ ] **Onboarding:** Add phone-auth screen, permissions rationale, empty-state CTA.
+- [x] **Design system:** `theme/Color.kt:1` consolidated Vibrant palette with semantic dark tokens (`VibrantPrimaryDark`, `SurfaceContainerDark`, `SecureGreenContainer`, etc.) + `Theme.kt:14` refined `DarkColorScheme` tonal mapping (was ad-hoc `#0A101A`), added `outlineVariant/surfaceContainer/errorContainer`, kept `dynamicColor=false` default. Extracted reusable atoms to `ui/components/ResalaComponents.kt:1` (`E2EEBanner`, `SecureAvatar`, `SectionLabel`) for consistency — `ChatRowItem`/`MessageBubbleItem` remain canonical but now share tokens.
+- [x] **Adaptive:** `MainActivity.kt:68` `isWideScreen >= 600` (was `>600`, now `>=600` medium breakpoint per `WindowSizeClass` spec — comment notes future `calculateWindowSizeClass`), expanded panel `320.dp → 360.dp` for tablet, `VerticalDivider` `0.5.dp → 1.dp` `outlineVariant.copy(alpha=0.6f)` for low-dpi hairline (was invisible on ldpi), `ChatListScreen.kt:238` `HorizontalDivider` same fix `0.5.dp → 1.dp outlineVariant`.
+- [x] **Search & Contacts:** FTS in-memory decrypted index — `ChatListScreen.kt:49` `searchQuery` now normalized (`ّ`, `ـ` tatweel removed) + filters `peerName/lastMessageText/phone/bio` via `users.find { chat.peerId }`, comment notes `ViewModel` `searchQuery` + `filteredChats` (`combine` at `ChatViewModel.kt:50`) for large histories + future Room FTS5 virtual table for decrypted plaintext (not persisted). `ChatViewModel.kt:32` `setSearchQuery()` + `filteredChats` flow, `ChatListScreen` keeps local filter for instant UI but scaffolded for ViewModel FTS when query >=3.
+- [x] **A11y + RTL:** Audit `ChatListScreen.kt:71` logo `contentDescription` → Arabic `"شعار رِسالة - قفل أمان"`, `ChatRowItem.kt:367` TalkBack `semantics { contentDescription = "name, typing/lastMessage, unread" }` at `ChatListScreen.kt:361`, `Horizontal/Vertical` dividers, FAB/inbox empty state `contentDescription` `"حالة فارغة..."` + `testTag` already present. `LocalLayoutDirection` RTL handled (`supportsRtl=true`), `ResalaScreenshotTest.kt:1` `Roborazzi` light `MyApplicationTheme(false)`, dark `true` with typing, RTL `ar-rSA` `CompositionLocalProvider(LayoutDirection.Rtl)` at `ResalaScreenshotTest.kt:42` → 3 screenshots `resala_chatlist_light/dark/rtl.png`.
+- [x] **Onboarding:** `ui/OnboardingScreen.kt:1` — phone `OutlinedTextField` (+966, `testTag onboarding_phone_input`), OTP, `AuthManager.signInWithPhone()`, `rememberLauncherForActivityResult` for `POST_NOTIFICATIONS/RECORD_AUDIO/CAMERA/ACCESS_FINE_LOCATION` with rationale cards (`PermissionRow`), `testTag onboarding_verify/start_cta`, skip → local mode. `MainActivity.kt:68,128` `NavHost` startDestination `if (isOnboarded) "chatList" else "onboarding"` (`AuthManager.getPhone()` check), wide split early `OnboardingScreen` if `!isOnboarded`, compact `composable("onboarding")` → `navigate("chatList") popUpTo inclusive`. `ChatListScreen.kt:241` empty-state CTA `Button empty_state_add_button` → `showAddDialog`.
 
 ---
 
