@@ -13,10 +13,11 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.resalachat.vjqkzp"
+    // Phase 5: keep applicationId for now; namespace migration com.example → com.resala.chat planned for 1.6
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "1.4.0-phase4"
+    versionCode = 7
+    versionName = "1.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -132,6 +133,9 @@ dependencies {
   testImplementation(libs.roborazzi)
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.roborazzi.junit.rule)
+  testImplementation(libs.androidx.room.testing)
+  testImplementation(libs.androidx.arch.core.testing)
+  testImplementation(libs.androidx.test.core.ktx)
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   androidTestImplementation(libs.androidx.espresso.core)

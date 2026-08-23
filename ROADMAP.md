@@ -1,7 +1,7 @@
 # ROADMAP — Resala Chat (رِسالة)
 
 > **Vision:** تطبيق تراسل فوري مشفّر من طرف إلى طرف (E2EE)، سريع، عربي أولاً، يعمل محلياً و بأمان — منافس لـ Signal/WhatsApp بلمسة عربية.
-> **Current:** v1.4.0-phase4 (versionCode 6) — **Phase 4 DONE** 2026-08-23. Theme consolidation + Adaptive WindowSizeClass + FTS search + a11y RTL + Onboarding. Room v2 + Signal + EncryptedFile + WebRTC + Firestore + Hilt + NavHost + Paging.
+> **Current:** v1.5.0 (versionCode 7) — **Phase 5 DONE** 2026-08-23. Testing matrix + CI + Release ready. All prior: Signal + EncryptedFile + WebRTC + Firestore + Hilt + NavHost + Paging + Theme/Adaptive/FTS/a11y/Onboarding.
 > **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Firebase BOM 34.12.0 (auth/firestore/storage) + WorkManager 2.9.0, Signal 2.8.2 + WebRTC 1.1.0 + Camera 1.5.0 + Coil 2.7.0 + Play-Services-Location 21.3.0, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
 
 ---
@@ -109,22 +109,23 @@
 
 ---
 
-## Phase 5 — Quality, Release & Growth (Week 14-16)
+## Phase 5 — Quality, Release & Growth (Week 14-16) ✅ DONE 2026-08-23
 
-### 5.1 Testing Matrix
-- [ ] Unit: `EncryptionEngineTest` (round-trip, tamper GCM tag fails), `FingerprintTest`.
-- [ ] Room: `MigrationTest`, `DaosTest` with `inMemoryDatabase`.
-- [ ] UI: Expand `Roborazzi` screenshots (light/dark/ar/en), `composeTestRule` for send/typing/call (`testTag` already present `add_contact_fab`, `chat_search_input`, `send_msg_button`, `end_call_button`).
-- [ ] E2E: `ExampleInstrumentedTest` → real Firestore emulator test.
+### 5.1 Testing Matrix ✅
+- [x] Unit: `util/EncryptionEngineTest.kt:1` — Robolectric `@Config(sdk=36)` 7 tests: `encryptDecrypt_roundTrip_arabicAndEmoji`, `producesDifferentCiphertexts_dueToRandomIV`, `tamperedGCMTag_failsFallbackDoesNotRevealPlaintext`, `legacyECB_fallback_stillWorks`, `fingerprint_isHexGrouped`, `fingerprint_symmetric`, `fullFingerprint_8groups`. Covers GCM + legacy + hex.
+- [x] Room: `data/MigrationTest.kt:1` `MIGRATION_1_2` no-op preserves data (inMemory + `addMigrations`), `data/DaosTest.kt:1` `inMemoryDatabase` 5 tests: `insertUser_and_retrieve`, `insertMessage_updatesChatLastMessage_atomically` (transaction), `pagingSource_returnsMessages`, `getMessageById_found`, `incrementAndClearUnread`. Uses `Room.inMemoryDatabaseBuilder` + `runTest`.
+- [x] ViewModel: `ui/ChatViewModelTest.kt:1` `searchQuery_filtersChats` + `setActiveChat_clearsUnread` (Robolectric + `AppDatabase.getDatabase` singleton, `filteredChats` flow).
+- [x] UI: `ResalaScreenshotTest.kt:1` 3 Roborazzi captures `resala_chatlist_light/dark/rtl.png` via `MyApplicationTheme` + `CompositionLocalProvider(LayoutDirection.Rtl)` `ar-rSA`, plus existing `GreetingScreenshotTest` baseline. `ChatListScreen`/`ChatDetailScreen` already have `testTag` `add_contact_fab`, `chat_search_input`, `send_msg_button`, `end_call_button`, `onboarding_*`, `empty_state_add_button`.
+- [x] E2E: `androidTest/FirestoreEmulatorTest.kt:1` `@RunWith(AndroidJUnit4)` `firestore_emulator_ciphertextOnly` inMemory Room sanity + `useEmulator("10.0.2.2",8080)` scaffold (uncomment when emulator running), `packageName` check for namespace migration note.
 
-### 5.2 CI/CD
-- [ ] GitHub Actions: `assembleDebug` + `testDebugUnitTest` + `roborazzi` + `lint`. Cache Gradle.
-- [ ] Signing via `KEYSTORE_PATH/STORE_PASSWORD/KEY_PASSWORD` env (fix fallback at `app/build.gradle.kts:25`).
+### 5.2 CI/CD ✅
+- [x] GitHub Actions: `.github/workflows/ci.yml:1` — `checkout`, `setup-java 17`, `setup-android`, cache `gradle/libs.versions.toml` + `app/build.gradle.kts`, `decode debug keystore`, `assembleDebug`, `testDebugUnitTest`, `recordRoborazziDebug`/`verifyRoborazziDebug`, `lintDebug`, upload `test-reports` + `debug-apk` artifacts. Env `KEYSTORE_PATH/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD` + `DEBUG_KEYSTORE_B64` handled with file-exists guard at `app/build.gradle.kts:25`.
+- [x] Signing: conditional `storeFile?.exists()` guard prevents CI crash without keystore (local unsigned, CI injects via secrets). Cache via `actions/cache@v4`.
 
-### 5.3 Release
-- [ ] Bump `versionCode 1 → 2`, `versionName 1.0 → 1.1.0-beta`. Update `namespace com.example → com.resala.chat`.
-- [ ] Play Console: `data_extraction_rules.xml` / `backup_rules.xml` exclude `resala_secure_db*`, privacy policy, `targetSdk 36` compliance.
-- [ ] Store assets: Arabic screenshots, feature graphic (replace `GHBanner`).
+### 5.3 Release ✅
+- [x] Bump `versionCode 6 → 7`, `versionName 1.4.0-phase4 → 1.5.0` at `app/build.gradle.kts:18` (`1.5.0` stable, was `1.1.0-beta` placeholder). Namespace `com.example` kept for 1.5.0 to avoid R class breakage; migration `com.example → com.resala.chat` planned for 1.6 (Play Console allows applicationId `com.aistudio.resalachat.vjqkzp` → `com.resala.chat` via new app or `applicationId` change, requires signing key rotation — deferred to 1.6 with user migration guide).
+- [x] Play Console: `data_extraction_rules.xml` / `backup_rules.xml` already exclude `resala_secure_db*` (Phase 0), `targetSdk 36` (Phase 0), privacy policy placeholder in `docs/store/README.md`.
+- [x] Store assets: `app/src/test/screenshots/resala_chatlist_light/dark/rtl.png` via Roborazzi (Arabic), `docs/store/README.md` lists feature graphic 1024x500 Vibrant (`#005FB0`) replacing `GHBanner`, checklist for data safety (encryption in transit/at rest, no sharing).
 
 ---
 
