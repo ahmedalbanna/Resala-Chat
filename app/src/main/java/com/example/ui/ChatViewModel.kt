@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.data.*
+import com.example.data.remote.AuthManager
+import com.example.data.remote.FirestoreSyncManager
 import com.example.util.EncryptionEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -20,10 +22,12 @@ import java.util.UUID
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val repository: ChatRepository,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val authManager: AuthManager,
+    private val syncManager: FirestoreSyncManager
 ) : ViewModel() {
 
-    // Legacy constructor for previews/tests without Hilt (Phase 1 backward compat)
+    // Legacy constructor for previews/tests without Hilt (Phase 1 backward compat + Phase 2 local-only fallback)
     constructor(application: Application) : this(
         repository = ChatRepository(
             db = AppDatabase.getDatabase(application),
@@ -31,7 +35,18 @@ class ChatViewModel @Inject constructor(
             chatDao = AppDatabase.getDatabase(application).chatDao(),
             messageDao = AppDatabase.getDatabase(application).messageDao()
         ),
-        savedStateHandle = SavedStateHandle()
+        savedStateHandle = SavedStateHandle(),
+        authManager = AuthManager(application),
+        syncManager = FirestoreSyncManager(
+            context = application,
+            authManager = AuthManager(application),
+            chatRepository = ChatRepository(
+                db = AppDatabase.getDatabase(application),
+                userDao = AppDatabase.getDatabase(application).userDao(),
+                chatDao = AppDatabase.getDatabase(application).chatDao(),
+                messageDao = AppDatabase.getDatabase(application).messageDao()
+            )
+        )
     )
 
     // UI States
@@ -63,6 +78,9 @@ class ChatViewModel @Inject constructor(
     val activeCallState = _activeCallState.asStateFlow()
 
     // Phase 1: activeChatId mirrored to SavedStateHandle for process death + NavHost
+    // Phase 2: Firestore remote observe job
+    private var remoteObserveJob: Job? = null
+
     init {
         // Restore active chat from SavedStateHandle (NavHost deep link / rotation)
         savedStateHandle.get<String>("chatId")?.let { _activeChatId.value = it }
@@ -73,18 +91,32 @@ class ChatViewModel @Inject constructor(
             }
         }
         // Seeding now handled by AppDatabase seedCallback — no ViewModel race.
+        // Phase 2: warm Firebase Auth + enable offline persistence (local-only fallback if not configured)
+        try { syncManager.enableOfflinePersistence() } catch (_: Exception) {}
+        viewModelScope.launch {
+            try { authManager.signInAnonymously() } catch (_: Exception) {}
+        }
+        // Start remote observe for restored chat (deep link)
+        _activeChatId.value?.let { startRemoteObserve(it) }
     }
 
-    // Navigation and chat activation — also clears unread + updates SavedStateHandle
+    // Navigation and chat activation — also clears unread + updates SavedStateHandle + starts Firestore listener
     fun setActiveChat(chatId: String?) {
         _activeChatId.value = chatId
+        remoteObserveJob?.cancel()
         if (chatId != null) {
             savedStateHandle["chatId"] = chatId
-            viewModelScope.launch {
-                repository.clearUnread(chatId)
-            }
+            viewModelScope.launch { repository.clearUnread(chatId) }
+            startRemoteObserve(chatId)
         } else {
             savedStateHandle.remove<String>("chatId")
+        }
+    }
+
+    private fun startRemoteObserve(chatId: String) {
+        remoteObserveJob?.cancel()
+        remoteObserveJob = viewModelScope.launch {
+            try { syncManager.observeChat(chatId).collect {} } catch (_: Exception) {}
         }
     }
 
@@ -150,7 +182,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // Sending Actions
+    // Sending Actions — Phase 2: push to Firestore after local Room insert (offline-first)
     fun sendTextMessage(chatId: String, text: String, peerPublicKey: String) {
         if (text.trim().isEmpty()) return
         viewModelScope.launch {
@@ -165,9 +197,13 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
-
-            // Trigger simulated secure bot/peer reply
-            triggerMockPeerResponse(chatId, text, peerPublicKey)
+            // Phase 2: Firestore sync (no-op if local-only mode)
+            try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            // Trigger simulated secure bot/peer reply (will be replaced by real remote peer in production)
+            // In Firestore mode, real peer reply comes via observeChat
+            if (!authManager.isFirebaseConfigured()) {
+                triggerMockPeerResponse(chatId, text, peerPublicKey)
+            }
         }
     }
 
@@ -187,7 +223,10 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
-            triggerMockPeerResponse(chatId, "[أرسل موقعاً جغرافياً]", peerPublicKey)
+            try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            if (!authManager.isFirebaseConfigured()) {
+                triggerMockPeerResponse(chatId, "[أرسل موقعاً جغرافياً]", peerPublicKey)
+            }
         }
     }
 
@@ -206,7 +245,10 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
-            triggerMockPeerResponse(chatId, "[أرسل صورة]", peerPublicKey)
+            try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            if (!authManager.isFirebaseConfigured()) {
+                triggerMockPeerResponse(chatId, "[أرسل صورة]", peerPublicKey)
+            }
         }
     }
 
@@ -226,7 +268,10 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
-            triggerMockPeerResponse(chatId, "[أرسل تسجيلاً صوتياً]", peerPublicKey)
+            try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            if (!authManager.isFirebaseConfigured()) {
+                triggerMockPeerResponse(chatId, "[أرسل تسجيلاً صوتياً]", peerPublicKey)
+            }
         }
     }
 

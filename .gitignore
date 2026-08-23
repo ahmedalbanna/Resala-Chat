@@ -15,6 +15,7 @@
 .cxx
 local.properties
 .env
+google-services.json
 debug.keystore
 debug.keystore.base64
 my-upload-key.jks

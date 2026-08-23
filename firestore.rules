@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 2: Resala Chat — ciphertext only, server never sees plaintext.
+    // Auth required, senderUid must match auth uid, no plaintext fields allowed.
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(senderUid) {
+      return isAuthenticated() && request.auth.uid == senderUid;
+    }
+    // Validate FirestoreMessage shape: no plaintext body
+    function isValidMessage() {
+      return request.resource.data.keys().hasAll(['id','chatId','senderId','contentCipher','msgType','timestamp'])
+        && request.resource.data.contentCipher is string
+        && request.resource.data.contentCipher.size() < 20000
+        && request.resource.data.msgType in ['TEXT','IMAGE','AUDIO','LOCATION']
+        && (!('plainText' in request.resource.data) && !('plain' in request.resource.data));
+    }
+
+    match /chats/{chatId} {
+      // Chat metadata doc — only participants can read/write
+      // For scaffold, any authenticated user can create; Phase 2b will add participants list check
+      allow read, write: if isAuthenticated();
+
+      match /messages/{msgId} {
+        allow read: if isAuthenticated()
+          && resource.data.chatId == chatId;
+        allow create, update: if isAuthenticated()
+          && request.resource.data.chatId == chatId
+          && request.resource.data.id == msgId
+          && isOwner(request.resource.data.senderUid)
+          && isValidMessage();
+        allow delete: if isAuthenticated()
+          && resource.data.senderUid == request.auth.uid;
+      }
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

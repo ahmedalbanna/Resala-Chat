@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.resalachat.vjqkzp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.1.0-phase1"
+    versionCode = 4
+    versionName = "1.2.0-phase2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -84,9 +84,7 @@ secrets {
   defaultPropertiesFileName = ".env.example"
 }
 
-// Phase 1 cleanup: removed deprecated accompanist-permissions (→ androidx.activity),
-// retired unused Retrofit/Moshi/OkHttp (reserved for Phase 2 custom WS if needed — re-add then),
-// kept coil/play-services-location/firebase-bom as they are wired or Phase 2 reserved.
+// Phase 2: Firebase + WorkManager + Phase 1 kept coil/play-services-location
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
@@ -109,9 +107,13 @@ dependencies {
   implementation(libs.androidx.paging.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.coil.compose)
   implementation(libs.hilt.android)
-  // implementation(libs.firebase.ai) // Phase 2
+  implementation(libs.firebase.auth)
+  implementation(libs.firebase.firestore)
+  implementation(libs.firebase.storage)
+  // implementation(libs.firebase.ai) // Phase 3+ (smart reply)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.play.services.location)

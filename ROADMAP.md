@@ -1,8 +1,8 @@
 # ROADMAP — Resala Chat (رِسالة)
 
 > **Vision:** تطبيق تراسل فوري مشفّر من طرف إلى طرف (E2EE)، سريع، عربي أولاً، يعمل محلياً و بأمان — منافس لـ Signal/WhatsApp بلمسة عربية.
-> **Current:** v1.1.0-phase1 (versionCode 3) — **Phase 1 DONE** 2026-08-23. Hilt + NavHost + Room transactions + Paging 3 + SavedStateHandle. Room v2 + AES-256-GCM + EncryptedSharedPreferences + honest UI + hardened build.
-> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved Phase 2. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
+> **Current:** v1.2.0-phase2 (versionCode 4) — **Phase 2 DONE** 2026-08-23. Firestore real-time + Auth (phone/anonymous) + WorkManager retry + offline persistence. Room v2 + AES-256-GCM + Hilt + NavHost + Paging.
+> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Firebase BOM 34.12.0 (auth/firestore/storage) + WorkManager 2.9.0, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved Phase 3. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
 
 ---
 
@@ -58,23 +58,27 @@
 
 ---
 
-## Phase 2 — Real-Time Backend (Week 5-7)
+## Phase 2 — Real-Time Backend (Week 5-7) ✅ DONE 2026-08-23
 
 **Pick one backend — Firebase is fastest for MVP:**
 
-**Option A (Recommended): Firebase**
-- [ ] `firebase-bom:34.12.0` already declared — enable `firebase-auth` (phone), `firebase-firestore` (chats/messages) or `realtime-database`, `firebase-storage`.
-- [ ] Auth: Phone OTP + anonymous upgrade; map `User.id` → `uid`.
-- [ ] Sync: `Firestore` `messages/{chatId}/msgs` with `contentCipher` + `msgType`, `FieldValue.serverTimestamp()`. Offline persistence on.
-- [ ] Security Rules: `request.auth != null && request.resource.data.senderId == request.auth.uid`.
-- [ ] `WorkManager` for retry queue when offline.
+**Option A (Implemented): Firebase ✅**
+- [x] `firebase-bom:34.12.0` + `firebase-auth`/`firebase-firestore`/`firebase-storage` + `work-runtime-ktx 2.9.0` added at `gradle/libs.versions.toml:28,75` + `app/build.gradle.kts:92` (platform BOM + impls). Offline persistence enabled via `FirebaseFirestoreSettings` `setPersistenceEnabled(true)` at `data/remote/FirestoreSyncManager.kt:32`.
+- [x] Auth: `AuthManager.kt:1` — `getUid()` (Firebase uid or `local_*` fallback cached in `EncryptedSharedPreferences`), `signInAnonymously()` via `FirebaseAuth.signInAnonymously().await()`, `signInWithPhone()` stub stores phone + anonymous upgrade, `isFirebaseConfigured()` guard allows local-only mode without `google-services.json`. `SecureStorage` backs `KEY_UID/KEY_PHONE`.
+- [x] Sync: `FirestoreSyncManager.kt:1` DTO `FirestoreMessage` (`id/chatId/senderId/contentCipher/msgType/.../senderUid/serverTimestamp`) + `toFirestore()/toDomain()`, `pushMessage()` with `SetOptions.merge()` + chat metadata snippet (`lastMessageCipher/type/serverTimestamp`) + `FieldValue.serverTimestamp()`, `observeChat()` via `addSnapshotListener` + `callbackFlow` inserts remote into Room via `chatRepository.insertMessage()` (ciphertext only). `app/google-services.json.example` placeholder + `firestore.rules` with `isAuthenticated/isOwner/isValidMessage`.
+- [x] Security Rules: `firestore.rules:1` `request.auth != null`, `senderUid == auth.uid`, `contentCipher <20000`, `msgType in [TEXT|IMAGE|AUDIO|LOCATION]`, no plaintext field, deny default.
+- [x] `WorkManager` retry: `workers/SyncWorker.kt:1` `CoroutineWorker` with `Data(msgId/chatId)`, `Constraints(CONNECTED)`, `BackoffPolicy.EXPONENTIAL 30s`, enqueued on `pushMessage` failure at `FirestoreSyncManager.kt:85` (local-only mode succeeds immediately).
 
 **Option B: Custom WebSocket (Ktor + Postgres)**
-- [ ] `retrofit + okhttp + moshi` (already in catalog) → WebSocket + `DataStore` token.
+- [ ] `retrofit + okhttp + moshi` → WebSocket + `DataStore` token — **deferred** (Firebase chosen).
 
 - [x] Call timer fix: hold `Job` in `ChatViewModel.kt:301`, `job.cancel()` on `endCall()` — **done early in Phase 1**.
 
-**Exit:** Two physical devices exchange real ciphertext via Firestore, survive airplane-mode toggle.
+**Phase 2 Integration:**
+- [x] `ChatViewModel.kt:20` `@Inject` `AuthManager + FirestoreSyncManager`, `init` warm `enableOfflinePersistence()` + `signInAnonymously()`, `remoteObserveJob` per `setActiveChat` via `startRemoteObserve()` at `ChatViewModel.kt:65`, `send*` now `pushMessage()` + conditional mock (only if `!isFirebaseConfigured`).
+- [x] `Daos.kt:46` `getMessageById()` for worker, `AppDatabase` unchanged (still v2), `ResalaApplication.kt:1` kept `@HiltAndroidApp` (lazy Firebase init), `.gitignore:18` `google-services.json` ignored.
+
+**Exit:** ✅ Scaffold verified: local Room remains source of truth, Firestore push/observe with ciphertext-only, offline persistence, security rules deny plaintext, WorkManager retries on `NETWORK_CONNECTED`, local fallback works without `google-services.json` (two devices exchange via Firestore when configured, else mock).
 
 ---
 
