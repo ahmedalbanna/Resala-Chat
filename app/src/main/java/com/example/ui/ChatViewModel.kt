@@ -11,6 +11,9 @@ import com.example.data.*
 import com.example.data.remote.AuthManager
 import com.example.data.remote.FirestoreSyncManager
 import com.example.util.EncryptionEngine
+import com.example.util.MediaManager
+import com.example.util.SignalManager
+import com.example.util.WebRtcManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -24,7 +27,10 @@ class ChatViewModel @Inject constructor(
     private val repository: ChatRepository,
     private val savedStateHandle: SavedStateHandle,
     private val authManager: AuthManager,
-    private val syncManager: FirestoreSyncManager
+    private val syncManager: FirestoreSyncManager,
+    private val signalManager: SignalManager,
+    private val mediaManager: MediaManager,
+    private val webRtcManager: WebRtcManager
 ) : ViewModel() {
 
     // Legacy constructor for previews/tests without Hilt (Phase 1 backward compat + Phase 2 local-only fallback)
@@ -46,7 +52,10 @@ class ChatViewModel @Inject constructor(
                 chatDao = AppDatabase.getDatabase(application).chatDao(),
                 messageDao = AppDatabase.getDatabase(application).messageDao()
             )
-        )
+        ),
+        signalManager = SignalManager(application),
+        mediaManager = MediaManager(application),
+        webRtcManager = WebRtcManager(application)
     )
 
     // UI States
@@ -96,6 +105,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try { authManager.signInAnonymously() } catch (_: Exception) {}
         }
+        // Phase 3: init WebRTC + Signal identity
+        try { webRtcManager.initialize() } catch (_: Exception) {}
+        try { signalManager.getIdentityKeyPair() } catch (_: Exception) {}
         // Start remote observe for restored chat (deep link)
         _activeChatId.value?.let { startRemoteObserve(it) }
     }
@@ -182,11 +194,11 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // Sending Actions — Phase 2: push to Firestore after local Room insert (offline-first)
+    // Sending Actions — Phase 3: SignalManager (X3DH+Ratchet) with AES-GCM fallback + Firestore push
     fun sendTextMessage(chatId: String, text: String, peerPublicKey: String) {
         if (text.trim().isEmpty()) return
         viewModelScope.launch {
-            val cipherText = EncryptionEngine.encrypt(text, peerPublicKey)
+            val cipherText = try { signalManager.encrypt(text, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(text, peerPublicKey) }
             val msgId = UUID.randomUUID().toString()
             val message = Message(
                 id = msgId,
@@ -197,10 +209,7 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
-            // Phase 2: Firestore sync (no-op if local-only mode)
             try { syncManager.pushMessage(message) } catch (_: Exception) {}
-            // Trigger simulated secure bot/peer reply (will be replaced by real remote peer in production)
-            // In Firestore mode, real peer reply comes via observeChat
             if (!authManager.isFirebaseConfigured()) {
                 triggerMockPeerResponse(chatId, text, peerPublicKey)
             }
@@ -210,7 +219,7 @@ class ChatViewModel @Inject constructor(
     fun sendLocationMessage(chatId: String, lat: Double, lng: Double, peerPublicKey: String) {
         viewModelScope.launch {
             val locationCaption = "📍 إحداثيات متبادلة مشفرة: ($lat, $lng)"
-            val cipherText = EncryptionEngine.encrypt(locationCaption, peerPublicKey)
+            val cipherText = try { signalManager.encrypt(locationCaption, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(locationCaption, peerPublicKey) }
             val msgId = UUID.randomUUID().toString()
             val message = Message(
                 id = msgId,
@@ -233,30 +242,49 @@ class ChatViewModel @Inject constructor(
     fun sendImageMessage(chatId: String, imageResName: String, peerPublicKey: String) {
         viewModelScope.launch {
             val caption = "🏞️ ملف وسائط مشفر وموثق"
-            val cipherText = EncryptionEngine.encrypt(caption, peerPublicKey)
+            val cipherText = try { signalManager.encrypt(caption, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(caption, peerPublicKey) }
             val msgId = UUID.randomUUID().toString()
+            // Phase 3: save placeholder bytes via EncryptedFile (real camera will pass bytes)
+            try { mediaManager.saveEncrypted(msgId, caption.toByteArray()) } catch (_: Exception) {}
             val message = Message(
                 id = msgId,
                 chatId = chatId,
                 senderId = "me",
                 contentCipher = cipherText,
                 msgType = "IMAGE",
-                localPath = imageResName, // pre-set resource name reference
+                localPath = imageResName,
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(message)
             try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            // TODO Phase 3b: upload EncryptedFile to Firebase Storage media/{chatId}/{msgId}.enc
             if (!authManager.isFirebaseConfigured()) {
                 triggerMockPeerResponse(chatId, "[أرسل صورة]", peerPublicKey)
             }
         }
     }
 
+    /** Phase 3 overload: real image bytes from camera/gallery via MediaManager */
+    fun sendImageMessage(chatId: String, imageBytes: ByteArray, peerPublicKey: String) {
+        viewModelScope.launch {
+            val msgId = UUID.randomUUID().toString()
+            val path = try { mediaManager.saveEncrypted(msgId, imageBytes) } catch (_: Exception) { null }
+            val caption = "🏞️ صورة مشفرة"
+            val cipherText = try { signalManager.encrypt(caption, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(caption, peerPublicKey) }
+            val message = Message(id = msgId, chatId = chatId, senderId = "me", contentCipher = cipherText, msgType = "IMAGE", localPath = path, timestamp = System.currentTimeMillis())
+            repository.insertMessage(message)
+            try { syncManager.pushMessage(message) } catch (_: Exception) {}
+            if (!authManager.isFirebaseConfigured()) triggerMockPeerResponse(chatId, "[أرسل صورة]", peerPublicKey)
+        }
+    }
+
     fun sendVoiceMessage(chatId: String, durationSecs: Int, peerPublicKey: String) {
         viewModelScope.launch {
             val caption = "🎙️ مقطع صوتي مرمز فائق الأمان"
-            val cipherText = EncryptionEngine.encrypt(caption, peerPublicKey)
+            val cipherText = try { signalManager.encrypt(caption, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(caption, peerPublicKey) }
             val msgId = UUID.randomUUID().toString()
+            // Phase 3: MediaRecorder Opus bytes would be saved via MediaManager before send
+            try { mediaManager.saveEncrypted(msgId, "opus_$durationSecs".toByteArray()) } catch (_: Exception) {}
             val message = Message(
                 id = msgId,
                 chatId = chatId,
@@ -276,21 +304,27 @@ class ChatViewModel @Inject constructor(
     }
 
     // Phase 1 fix: hold Job so while loop cancels on endCall (was leaking)
+    // Phase 3: WebRtcManager drives real PeerConnection, fallback to simulated HUD if native not loaded
     private var callJob: Job? = null
 
-    // Call Simulator Controls (Phase 0 mock, Phase 1 leak fixed)
     fun startCall(peerName: String, isVideo: Boolean) {
         callJob?.cancel()
+        try { webRtcManager.createPeerConnection(isVideo) } catch (_: Exception) {}
+        val webrtcState = webRtcManager.state.value
+        val initialStatus = if (webrtcState.connectionState == "connected") "متصل WebRTC P2P 🛡️" else "جاري الاتصال (محاكاة) ... 🔒"
         _activeCallState.value = CallState(
             peerName = peerName,
             isVideo = isVideo,
-            status = "جاري الاتصال (محاكاة) ... 🔒",
+            status = initialStatus,
             durationSecs = 0,
             activeMedia = true
         )
         callJob = viewModelScope.launch {
             delay(2000)
-            _activeCallState.value = _activeCallState.value?.copy(status = "متصل (محاكي) — تشفير محلي 🛡️")
+            // If WebRTC reported connected, show real status; else simulated
+            val conn = webRtcManager.state.value.connectionState
+            val connectedStatus = if (conn == "connected" && !webRtcManager.isSimulated()) "متصل WebRTC P2P — DTLS-SRTP 🛡️" else "متصل (محاكي) — تشفير محلي 🛡️"
+            _activeCallState.value = _activeCallState.value?.copy(status = connectedStatus)
             while (_activeCallState.value != null) {
                 delay(1000)
                 _activeCallState.value = _activeCallState.value?.let {
@@ -301,20 +335,25 @@ class ChatViewModel @Inject constructor(
     }
 
     fun toggleMuteCall() {
+        val newMuted = !(_activeCallState.value?.isMuted ?: false)
+        try { webRtcManager.toggleAudio(!newMuted) } catch (_: Exception) {}
         _activeCallState.value = _activeCallState.value?.let {
-            it.copy(isMuted = !it.isMuted)
+            it.copy(isMuted = newMuted)
         }
     }
 
     fun toggleCameraCall() {
+        val newVideo = !(_activeCallState.value?.isVideo ?: false)
+        try { webRtcManager.toggleVideo(newVideo) } catch (_: Exception) {}
         _activeCallState.value = _activeCallState.value?.let {
-            it.copy(isVideo = !it.isVideo)
+            it.copy(isVideo = newVideo)
         }
     }
 
     fun endCall() {
         callJob?.cancel()
         callJob = null
+        try { webRtcManager.close() } catch (_: Exception) {}
         _activeCallState.value = null
     }
 
@@ -353,7 +392,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            val replyCipher = EncryptionEngine.encrypt(responseText, peerPublicKey)
+            val replyCipher = try { signalManager.encrypt(responseText, peerPublicKey) } catch (_: Exception) { EncryptionEngine.encrypt(responseText, peerPublicKey) }
             val replyMsg = Message(
                 id = UUID.randomUUID().toString(),
                 chatId = chatId,
@@ -362,7 +401,6 @@ class ChatViewModel @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
             repository.insertMessage(replyMsg)
-            // Phase 1 fix: don't increment if user is currently viewing that chat (already cleared)
             if (_activeChatId.value != chatId) {
                 repository.incrementUnread(chatId)
             }

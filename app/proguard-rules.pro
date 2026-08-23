@@ -25,3 +25,19 @@
 -keep class androidx.room.** { *; }
 -keep class androidx.security.crypto.** { *; }
 -dontwarn androidx.security.crypto.**
+
+# Phase 1: keep Hilt
+-keep class dagger.hilt.** { *; }
+-keep class javax.inject.** { *; }
+
+# Phase 2: keep Firebase
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# Phase 3: keep Signal + WebRTC + Camera
+-keep class org.whispersystems.libsignal.** { *; }
+-keep class org.signal.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn org.whispersystems.**
+-dontwarn org.webrtc.**
+-keep class androidx.camera.** { *; }

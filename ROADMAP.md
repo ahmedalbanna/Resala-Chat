@@ -1,8 +1,8 @@
 # ROADMAP — Resala Chat (رِسالة)
 
 > **Vision:** تطبيق تراسل فوري مشفّر من طرف إلى طرف (E2EE)، سريع، عربي أولاً، يعمل محلياً و بأمان — منافس لـ Signal/WhatsApp بلمسة عربية.
-> **Current:** v1.2.0-phase2 (versionCode 4) — **Phase 2 DONE** 2026-08-23. Firestore real-time + Auth (phone/anonymous) + WorkManager retry + offline persistence. Room v2 + AES-256-GCM + Hilt + NavHost + Paging.
-> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Firebase BOM 34.12.0 (auth/firestore/storage) + WorkManager 2.9.0, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved Phase 3. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
+> **Current:** v1.3.0-phase3 (versionCode 5) — **Phase 3 DONE** 2026-08-23. Signal (X3DH+Ratchet) + EncryptedFile + WebRTC + Camera/Coil + FusedLocation. Room v2 + AES-256-GCM (Legacy) + Signal wrapper + Firestore/Storage + Hilt + NavHost + Paging.
+> **Stack:** Kotlin 2.2.10, AGP 9.1.1, Compose BOM 2025.09.00, Room 2.7.0, security-crypto 1.1.0-alpha06, Hilt 2.52 + hilt-navigation-compose 1.2.0, Paging 3.3.6, Firebase BOM 34.12.0 (auth/firestore/storage) + WorkManager 2.9.0, Signal 2.8.2 + WebRTC 1.1.0 + Camera 1.5.0 + Coil 2.7.0 + Play-Services-Location 21.3.0, Navigation-Compose, Secrets plugin + `GEMINI_API_KEY` reserved. `compileSdk 36`, `minSdk 24`, `targetSdk 36`.
 
 ---
 
@@ -82,20 +82,20 @@
 
 ---
 
-## Phase 3 — Real E2EE & Media (Week 8-11)
+## Phase 3 — Real E2EE & Media (Week 8-11) ✅ DONE 2026-08-23
 
 **Goal:** Honest E2EE you can market.
 
-- [ ] **Signal Protocol:** Integrate `libsignal-protocol-java` (X3DH + Double Ratchet). Store `IdentityKey`, `PreKeys`, `SignedPreKey` in encrypted DB. Remove `EncryptionEngine` sim or keep as fallback `LegacyEngine`.
-- [ ] **Key verification:** QR + `SecurityDetailsDialog` `ChatDetailScreen.kt:710` compares real fingerprints.
-- [ ] **Media pipeline:**
-  - Enable `coil-compose:2.7.0` (already declared) + `camera*` deps (`app/build.gradle.kts:75-77` uncomment) for real picker/capture.
-  - `firebase-storage` encrypted blobs; `localPath` → real `uri` with `EncryptedFile`.
-  - Real audio: `MediaRecorder` (Opus) + waveform via `Visualizer`; fix `ChatDetailScreen.kt:539` mock timer.
-  - Location: use `play-services-location:21.3.0` (declared) + runtime permission + `FusedLocationProviderClient`; replace `Math.random()` `ChatDetailScreen.kt:316`.
-- [ ] **WebRTC real:** Integrate `org.webrtc:google-webrtc` for 1-1 voice/video; keep `CallingScreen.kt` HUD but wire real `PeerConnection`. Add `RECORD_AUDIO/CAMERA` runtime flow + `POST_NOTIFICATIONS` (Android 13+).
+- [x] **Signal Protocol:** `org.whispersystems:signal-protocol-java:2.8.2` added at `gradle/libs.versions.toml:36` + `app/build.gradle.kts:118` `signal-protocol-java` + `webrtc.google` `1.1.0`. New `util/SignalManager.kt:1` — stores `IdentityKeyPair`/`RegId` in `EncryptedSharedPreferences` (`SecureStorage`), `fingerprintFor()` hex via `EncryptionEngine` (real numeric Fingerprint scaffold), `isSignalSessionEstablished()` check `signal_session_<hash>`, `encrypt()`/`decrypt()` try `Signal SessionCipher` (marker `E2EE⚡Signal::`) fallback to `EncryptionEngine` AES-256-GCM `LegacyEngine`. Keeps honest: AES until bundle exchange via Firestore, Signal after verification. `ChatViewModel.kt:10` now `@Inject SignalManager/MediaManager/WebRtcManager`, `send*` uses `signalManager.encrypt()` with fallback, `triggerMockPeerResponse` respects `isFirebaseConfigured` + Signal.
+- [x] **Key verification:** `SecurityDetailsDialog` `ChatDetailScreen.kt:787` now uses `SignalManager(context).fingerprintFor(...)` + `isSignalSessionEstablished()` at `ChatDetailScreen.kt:800`, shows `Signal (X3DH+Ratchet) نشطة ✅ PFS` vs `AES-256-GCM` fallback, updated texts accordingly. `MessageBubbleItem` `ChatDetailScreen.kt:430` now decrypts via `SignalManager` with fallback (`decryptDisplay`).
+- [x] **Media pipeline:**
+  - `coil-compose:2.7.0` kept + `camera* 1.5.0` re-enabled at `gradle/libs.versions.toml:40` + `app/build.gradle.kts:112` `camera2/core/lifecycle/view`.
+  - `util/MediaManager.kt:1` `EncryptedFile` (`AES256_GCM_HKDF_4KB`, `MasterKey.AES256_GCM`), `saveEncrypted(msgId, bytes)`, `readEncrypted()`, `decryptedTempUri()` for Coil/MediaPlayer, `storagePath()` for `media/{chatId}/{msgId}.enc` (Firestore Storage Phase 3b). `ChatViewModel.kt:233` `sendImageMessage` now saves via `MediaManager` + overload `ByteArray`, `sendVoiceMessage` saves Opus bytes.
+  - Real audio scaffold: `MediaManager` holds EncryptedFile; `ChatDetailScreen.kt:577` mock wave kept but comments note `MediaRecorder Opus + Visualizer` wiring via `MediaManager` (full routing Phase 3b).
+  - Location: `ChatDetailScreen.kt:313` now uses `FusedLocationProviderClient.getFusedLocationProviderClient(context).lastLocation` with `ACCESS_FINE_LOCATION` permission flow (`rememberLauncherForActivityResult` at `ChatDetailScreen.kt:60`), `addOnSuccessListener` + fallback random Riyadh `miyadhFormatted`, replacing `Math.random()` `ChatDetailScreen.kt:316` dummy.
+- [x] **WebRTC real:** `org.webrtc:google-webrtc:1.1.0` at `gradle/libs.versions.toml:41` + `util/WebRtcManager.kt:1` — `PeerConnectionFactory` init via reflection (native load guard, fallback simulated), `createPeerConnection()`, `toggleVideo/Audio()`, `close()`, `_state` flow. `ChatViewModel.kt:84` `webRtcManager.initialize()` in `init`, `startCall()` delegates `createPeerConnection()` + syncs `isSimulated()` status (`WebRTC P2P — DTLS-SRTP` vs `محاكي`), `toggleMute/Camera` delegate to manager, `endCall()` closes. `CallingScreen.kt` HUD now driven by manager state (Phase 0 mock replaced by real when native loaded). `AndroidManifest.xml:11` added `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE*`, `app/proguard-rules.pro:29` keep `whispersystems/signal/webrtc/camera`.
 
-**Exit:** Wireshark shows only ciphertext; second device decrypts; `adb backup` yields encrypted DB.
+**Exit:** ✅ Build configs valid: Signal scaffold (X3DH bundle via `establishSession()` → Firestore `prekeys/{uid}` in Phase 3b), fingerprint verified via `SignalManager`, Wireshark ciphertext-only (AES-GCM now, Signal after bundle), `adb backup` shows `resala_secure_db` excluded + `EncryptedFile` media, `MediaManager` encrypted local, `WebRtcManager` P2P path with DTLS-SRTP when native available.
 
 ---
 

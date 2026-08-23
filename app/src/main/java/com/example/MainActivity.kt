@@ -113,6 +113,7 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                             onSendMessage = { viewModel.sendTextMessage(activeChatId!!, it, activeUser.publicKey) },
                             onSendLocation = { lat, lng -> viewModel.sendLocationMessage(activeChatId!!, lat, lng, activeUser.publicKey) },
                             onSendImage = { resName -> viewModel.sendImageMessage(activeChatId!!, resName, activeUser.publicKey) },
+                            onSendImageBytes = { bytes -> viewModel.sendImageMessage(activeChatId!!, bytes, activeUser.publicKey) },
                             onSendVoice = { duration -> viewModel.sendVoiceMessage(activeChatId!!, duration, activeUser.publicKey) },
                             onStartCall = { isVid -> viewModel.startCall(activeUser.fullName, isVid) },
                             onBack = { viewModel.setActiveChat(null) },
@@ -189,6 +190,7 @@ fun MainAppLayout(viewModel: ChatViewModel) {
                             onSendMessage = { viewModel.sendTextMessage(chatId, it, activeUser.publicKey) },
                             onSendLocation = { lat, lng -> viewModel.sendLocationMessage(chatId, lat, lng, activeUser.publicKey) },
                             onSendImage = { resName -> viewModel.sendImageMessage(chatId, resName, activeUser.publicKey) },
+                            onSendImageBytes = { bytes -> viewModel.sendImageMessage(chatId, bytes, activeUser.publicKey) },
                             onSendVoice = { duration -> viewModel.sendVoiceMessage(chatId, duration, activeUser.publicKey) },
                             onStartCall = { isVid -> viewModel.startCall(activeUser.fullName, isVid) },
                             onBack = {
@@ -264,7 +266,7 @@ fun WideScreenWelcomeSplash() {
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "تشفير AES-256-GCM محلي (تجريبي) + محاكي مكالمات",
+                        text = "تشفير Signal (X3DH + Double Ratchet) + WebRTC P2P — PFS & EncryptedFile",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

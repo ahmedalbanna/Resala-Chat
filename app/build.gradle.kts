@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.resalachat.vjqkzp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.2.0-phase2"
+    versionCode = 5
+    versionName = "1.3.0-phase3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -84,11 +84,15 @@ secrets {
   defaultPropertiesFileName = ".env.example"
 }
 
-// Phase 2: Firebase + WorkManager + Phase 1 kept coil/play-services-location
+// Phase 3: Media + E2EE + Realtime (Phase 2 kept)
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.camera.camera2)
+  implementation(libs.androidx.camera.core)
+  implementation(libs.androidx.camera.lifecycle)
+  implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
@@ -114,6 +118,8 @@ dependencies {
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.storage)
   // implementation(libs.firebase.ai) // Phase 3+ (smart reply)
+  implementation(libs.signal.protocol.java)
+  implementation(libs.webrtc.google)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.play.services.location)
